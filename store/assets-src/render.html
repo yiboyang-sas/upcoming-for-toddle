@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Store asset renderer</title>
+<!--
+  Renders Chrome Web Store images from the extension's real UI code with sample
+  data. Open with ?shot=1..4, ?shot=tile or ?shot=marquee.
+  scripts/render-store-assets.sh captures each one with headless Chrome.
+-->
+<link rel="stylesheet" href="../../extension/lib/view.css" />
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: #211c1d;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  .shot { position: relative; width: 1280px; height: 800px; overflow: hidden; background: #fbf4f4; }
+  .shot.dark { background: #151416; color: #eeeaea; }
+
+  .caption { position: absolute; left: 72px; top: 96px; width: 380px; }
+  .caption h1 { margin: 0 0 14px; font-size: 38px; line-height: 1.15; letter-spacing: -0.015em; font-weight: 650; text-wrap: balance; }
+  .caption p { text-wrap: pretty; }
+  .caption p { margin: 0; font-size: 18px; color: #6b6264; }
+  .dark .caption p { color: #a8a0a1; }
+  .caption.top { top: 56px; width: auto; right: 72px; }
+  .caption.top h1 { font-size: 34px; margin-bottom: 6px; }
+
+  /* ---- browser window ---- */
+  .window {
+    position: absolute; overflow: hidden; border-radius: 12px; background: #f6f5f6;
+    border: 1px solid rgba(0,0,0,.09); box-shadow: 0 1px 2px rgba(0,0,0,.05), 0 16px 40px rgba(60,20,25,.08);
+  }
+  .dark .window { background: #1d1c1e; border-color: rgba(255,255,255,.08); box-shadow: 0 16px 40px rgba(0,0,0,.4); }
+  .toolbar { display: flex; align-items: center; gap: 14px; height: 50px; padding: 0 16px; background: #fff; border-bottom: 1px solid #ebe6e7; }
+  .dark .toolbar { background: #2a292c; border-color: #38363a; }
+  .lights { display: flex; gap: 7px; margin-right: 6px; }
+  .lights i { width: 11px; height: 11px; border-radius: 50%; background: #dcd7d8; }
+  .dark .lights i { background: #48454a; }
+  .nav svg { width: 18px; height: 18px; color: #8b8385; display: block; }
+  .nav { display: flex; gap: 12px; }
+  .address { flex: 1; height: 32px; border-radius: 16px; background: #f3eff0; display: flex; align-items: center; padding: 0 16px; font-size: 14px; color: #6b6264; }
+  .dark .address { background: #1f1e21; color: #a8a0a1; }
+  .ext { position: relative; width: 20px; height: 20px; }
+  .ext img { width: 20px; height: 20px; display: block; }
+  .ext .badge {
+    position: absolute; left: 10px; top: 9px; min-width: 16px; height: 14px; padding: 0 4px;
+    border-radius: 7px; background: #c7394f; color: #fff; font-size: 10px; font-weight: 700; line-height: 14px; text-align: center;
+  }
+  .avatar { width: 22px; height: 22px; border-radius: 50%; background: #e3dcdd; }
+  .dark .avatar { background: #45424a; }
+
+  /* ---- fake page behind the UI ---- */
+  .page { position: absolute; left: 0; right: 0; top: 51px; bottom: 0; }
+  .page .side { position: absolute; left: 0; top: 0; bottom: 0; width: 200px; background: #fff; border-right: 1px solid #ece7e8; padding: 26px 20px; }
+  .dark .page .side { background: #222124; border-color: #333135; }
+  .page .main { position: absolute; left: 232px; top: 30px; right: 32px; }
+  .bar { height: 11px; border-radius: 6px; background: #e8e3e4; margin-bottom: 17px; }
+  .dark .bar { background: #333036; }
+  .block { height: 130px; border-radius: 10px; background: #fff; border: 1px solid #ece7e8; margin-bottom: 18px; padding: 20px; }
+  .dark .block { background: #232225; border-color: #333135; }
+
+  .popup {
+    position: absolute; border-radius: 10px; overflow: hidden; background: #fff;
+    border: 1px solid rgba(0,0,0,.08); box-shadow: 0 10px 30px rgba(40,10,15,.16);
+  }
+  .dark .popup { background: #1b1b1d; border-color: rgba(255,255,255,.08); box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+  .panel { position: absolute; top: 0; right: 0; bottom: 0; width: 380px; background: #fff; border-left: 1px solid #ece7e8; box-shadow: -8px 0 24px rgba(40,10,15,.08); }
+
+  /* ---- promo tiles ---- */
+  .tile, .marquee { position: relative; overflow: hidden; background: #fbeeef; }
+  .tile { width: 440px; height: 280px; padding: 44px 40px; }
+  .tile img { width: 60px; height: 60px; display: block; }
+  .tile h2 { margin: 26px 0 6px; font-size: 30px; line-height: 1.1; letter-spacing: -0.015em; font-weight: 700; }
+  .tile p { margin: 0; font-size: 17px; color: #6b6264; }
+  .marquee { width: 1400px; height: 560px; }
+  .marquee .m-copy { position: absolute; left: 96px; top: 150px; width: 600px; }
+  .marquee .m-copy img { width: 72px; height: 72px; display: block; }
+  .marquee .m-copy h2 { margin: 30px 0 12px; font-size: 52px; line-height: 1.05; letter-spacing: -0.02em; font-weight: 700; }
+  .marquee .m-copy p { margin: 0; font-size: 22px; color: #6b6264; max-width: 520px; }
+</style>
+</head>
+<body>
+<script>
+  // Freeze the clock at 3:40 PM so sample due times read naturally.
+  (() => { const d = new Date(); d.setHours(15, 40, 0, 0); const t = d.getTime(); Date.now = () => t; })();
+</script>
+<script src="../../extension/lib/view.js"></script>
+<script>
+  const shot = new URLSearchParams(location.search).get("shot") || "1";
+  const ICON = "icon-art.png";
+  const now = Date.now(), H = 3600e3, D = 24 * H;
+  const at = (days, hour, min = 59) => { const d = new Date(now + days * D); d.setHours(hour, min, 0, 0); return d.getTime(); };
+  const courses = {
+    math: { title: "Mathematics", color: "#2f6fdb" },
+    bio: { title: "Biology", color: "#0f8a6a" },
+    eng: { title: "Language & Literature", color: "#8a3fd1" },
+    hist: { title: "Individuals & Societies", color: "#b4541a" },
+    des: { title: "Design", color: "#d14d8a" },
+  };
+  const T = (o) => ({ kind: "assignment", type: null, allDay: false, closesAt: null, status: null, isNew: false, locked: false, unread: 0, url: "#", ...o, courseTitle: o.courseTitle || courses[o.courseId]?.title });
+  const tasks = [
+    T({ id: "1", title: "Quadratic functions problem set", courseId: "math", type: "Formative assessment", dueAt: at(0, 18, 0), isNew: true, requiresSubmission: true }),
+    T({ id: "2", title: "Cell respiration lab report", courseId: "bio", type: "Summative assessment", dueAt: at(0, 23), status: "In progress", unread: 1, requiresSubmission: true }),
+    T({ id: "3", title: "Reading journal: chapters 5–7", courseId: "eng", type: "Learning experience", dueAt: at(1, 8, 30), requiresSubmission: false }),
+    T({ id: "4", title: "Source analysis: causes of WWI", courseId: "hist", type: "Quick task", dueAt: at(3, 15, 0), requiresSubmission: true }),
+    T({ id: "5", title: "Unit 2 test", courseId: "math", type: "Summative assessment", dueAt: at(4, 9, 0), requiresSubmission: false }),
+    T({ id: "6", title: "Photosynthesis reading notes", courseId: "bio", type: "Learning experience", dueAt: at(5, 20, 0), isNew: true, requiresSubmission: false }),
+    T({ id: "7", title: "Prototype sketches", courseId: "des", type: "Formative assessment", dueAt: at(6, 23), requiresSubmission: true }),
+    T({ id: "8", kind: "deadline", title: "Process journal check-in", courseTitle: "Personal Project", type: "Personal Project", dueAt: at(12, 23), allDay: true }),
+    T({ id: "9", title: "Ecology field sketches", courseId: "bio", type: "Summative assessment", dueAt: at(16, 9, 0), requiresSubmission: true }),
+    T({ id: "10", title: "Genetics vocabulary quiz", courseId: "bio", type: "Quick task", dueAt: now - 26 * H, requiresSubmission: true }),
+    T({ id: "11", title: "Chapter 8 reading", courseId: "bio", type: "Learning experience", dueAt: now - 50 * H, requiresSubmission: false }),
+  ];
+  const data = { tasks, courses, syncedAt: now - 2 * 60e3, sync: { state: "ok" } };
+  const dueSoon = tasks.filter((t) => t.dueAt >= now && t.dueAt - now <= 2 * D).length;
+  const noop = () => {};
+  const el = (html) => { document.body.insertAdjacentHTML("beforeend", html); return document.body.lastElementChild; };
+
+  function popupFooter() {
+    const f = document.createElement("footer");
+    f.className = "tu-foot";
+    f.innerHTML = '<label class="tu-toggle"><input type="checkbox" checked> Show “Upcoming” tab on Toddle</label><span>v1.0.5</span>';
+    return f;
+  }
+
+  function mount(host, { variant = "popup", theme = "light", course } = {}) {
+    const opts = variant === "popup"
+      ? { variant, theme, onRefresh: noop, onOpenToddle: noop, onOpenTask: noop, footer: popupFooter() }
+      : { variant, theme, onRefresh: noop, onClose: noop, onOpenTask: noop };
+    TUView.mount(host, opts).update(data);
+    if (course) {
+      const select = host.querySelector(".tu-select");
+      select.value = course;
+      select.dispatchEvent(new Event("change"));
+    }
+  }
+
+  const NAV = '<div class="nav">'
+    + '<svg viewBox="0 0 20 20"><path d="M12 4l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    + '<svg viewBox="0 0 20 20"><path d="M8 4l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" opacity=".45"/></svg>'
+    + '<svg viewBox="0 0 20 20"><path d="M16 10a6 6 0 1 1-1.8-4.3M16 4v3.5h-3.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    + '</div>';
+  const bars = (n, widths) => Array.from({ length: n }, (_, i) => `<div class="bar" style="width:${widths[i % widths.length]}%"></div>`).join("");
+  const page = () => `
+    <div class="page">
+      <div class="side">${bars(9, [75, 55, 85, 60, 45])}</div>
+      <div class="main">
+        <div class="bar" style="width:200px;height:20px;margin-bottom:26px"></div>
+        <div class="block">${bars(3, [40, 75, 60])}</div>
+        <div class="block">${bars(3, [55, 65, 35])}</div>
+        <div class="block">${bars(3, [45, 70, 50])}</div>
+        <div class="block">${bars(3, [60, 40, 70])}</div>
+      </div>
+    </div>`;
+  const browser = ({ x, y, w, h, badge = true }) => `
+    <div class="window" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px">
+      <div class="toolbar">
+        <div class="lights"><i></i><i></i><i></i></div>${NAV}
+        <div class="address">web.toddleapp.com</div>
+        <div class="ext"><img src="${ICON}" alt="">${badge ? `<span class="badge">${dueSoon}</span>` : ""}</div>
+        <div class="avatar"></div>
+      </div>
+      ${page()}
+    </div>`;
+
+  // Popup shots: caption on the left, browser on the right with the popup
+  // hanging from the toolbar icon the way Chrome shows it.
+  function popupShot({ title, text, dark = false, course }) {
+    const s = el(`
+      <div class="shot ${dark ? "dark" : ""}">
+        <div class="caption"><h1>${title}</h1><p>${text}</p></div>
+        ${browser({ x: 500, y: 56, w: 740, h: 800 })}
+      </div>`);
+    const win = s.querySelector(".window");
+    const icon = s.querySelector(".ext").getBoundingClientRect();
+    const winBox = win.getBoundingClientRect();
+    const pop = document.createElement("div");
+    pop.className = "popup";
+    pop.style.top = "54px";
+    // Right-align just past the icon, as Chrome anchors extension popups.
+    pop.style.left = `${Math.round(icon.right - winBox.left + 8 - 380)}px`;
+    win.append(pop);
+    mount(pop, { theme: dark ? "dark" : "light", course });
+  }
+
+  if (shot === "1") {
+    popupShot({
+      title: "Your Toddle to-do list, one click away",
+      text: "Every assignment and deadline from all your classes, sorted by when it’s due.",
+    });
+  } else if (shot === "2") {
+    const s = el(`
+      <div class="shot">
+        <div class="caption top"><h1>Also right inside Toddle</h1><p>An Upcoming tab on the edge of every Toddle page opens the same list.</p></div>
+        ${browser({ x: 72, y: 186, w: 1136, h: 700 })}
+      </div>`);
+    const panel = document.createElement("aside");
+    panel.className = "panel";
+    s.querySelector(".page").append(panel);
+    mount(panel, { variant: "panel" });
+  } else if (shot === "3") {
+    popupShot({
+      dark: true,
+      title: "See what’s due at a glance",
+      text: "The badge shows how many tasks are due in the next two days. Dark mode is supported.",
+    });
+  } else if (shot === "4") {
+    popupShot({
+      course: "bio",
+      title: "Focus on one class",
+      text: "Filter the list when you’re planning what to work on next.",
+    });
+  } else if (shot === "tile") {
+    el(`
+      <div class="tile">
+        <img src="${ICON}" alt="">
+        <h2>Upcoming for Toddle</h2>
+        <p>Your Toddle deadlines in one list.</p>
+      </div>`);
+  } else if (shot === "marquee") {
+    const s = el(`
+      <div class="marquee">
+        <div class="m-copy">
+          <img src="${ICON}" alt="">
+          <h2>Upcoming for Toddle</h2>
+          <p>Every assignment and deadline from all your classes, sorted by when it’s due.</p>
+        </div>
+      </div>`);
+    const pop = document.createElement("div");
+    pop.className = "popup";
+    Object.assign(pop.style, { top: "64px", left: "880px" });
+    s.append(pop);
+    mount(pop);
+  }
+</script>
+</body>
+</html>

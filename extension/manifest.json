@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "Upcoming for Toddle",
+  "short_name": "Upcoming",
+  "version": "1.0.5",
+  "description": "See your upcoming Toddle assignments and deadlines at a glance. Unofficial; not affiliated with Toddle.",
+  "minimum_chrome_version": "116",
+  "permissions": ["storage", "alarms", "cookies"],
+  "host_permissions": ["https://*.toddleapp.com/*", "https://*.toddleapp.cn/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Upcoming for Toddle",
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://web.toddleapp.com/*", "https://web.toddleapp.cn/*"],
+      "js": ["lib/view.js", "content/panel.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["lib/view.css"],
+      "matches": ["https://web.toddleapp.com/*", "https://web.toddleapp.cn/*"]
+    }
+  ]
+}
